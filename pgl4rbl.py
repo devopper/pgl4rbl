@@ -125,6 +125,7 @@ def process_one(conn):
         try:
             k, v = L.split('=', 1)
         except ValueError:
+            print "DIEING VALUEERROR"
             die("invalid input line: %r" % L)
 
         d[k.strip()] = v.strip()
@@ -133,6 +134,7 @@ def process_one(conn):
         ip = d['client_address']
         helo = d['helo_name']
     except KeyError:
+        print "DIEING KEYERROR"
         die("client_address/helo_name field not found in input data, aborting")
 
     if not ip:
