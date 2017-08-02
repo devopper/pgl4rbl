@@ -55,11 +55,14 @@ def main():
     conn = MySQLdb.Connect(host=HOST, user=USER, password=PASSWORD, db=DB)
 
     # sanity_check()
+    print "args = " + args
 
     if args.clean:
+        print "args clean"
         os.system("find '%s' -type f -mmin +%d -delete" %
                   (GREYLIST_DB, MAX_GREYLIST_TIME))
     else:
+        print "about to process"
         process_one(conn)
 
 
@@ -135,11 +138,13 @@ def process_one(conn):
     if not ip:
         die("client_address empty in input data, aborting")
 
+    print "Processing client: S:%s H:%s" % (ip, helo)
     log("Processing client: S:%s H:%s" % (ip, helo))
 
     action = process_ip(ip, helo, conn)
 
     log("Action for IP %s: %s" % (ip, action))
+    print "Action for IP %s: %s" % (ip, action)
     sys.stdout.write('action=%s\n\n' % action)
 
 
