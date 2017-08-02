@@ -32,10 +32,10 @@ import os.path
 import re
 import signal
 import socket
-import stat
 import sys
 import syslog
 import time
+import MySQLdb
 
 
 RE_IP = re.compile(r"\[(\d+)\.(\d+)\.(\d+)\.(\d+)\]")
@@ -52,13 +52,15 @@ def main():
     # Configure syslog support
     syslog.openlog("pgl4rbl", syslog.LOG_PID, getattr(syslog, SYSLOG_FACILITY))
 
-    sanity_check()
+    conn = MySQLdb.Connect(host=HOST, user=USER, password=PASSWORD, db=DB)
+
+    # sanity_check()
 
     if args.clean:
         os.system("find '%s' -type f -mmin +%d -delete" %
                   (GREYLIST_DB, MAX_GREYLIST_TIME))
     else:
-        process_one()
+        process_one(conn)
 
 
 def parse_args():
@@ -79,20 +81,20 @@ def load_config_file(config):
         sys.exit(2)
 
 
-def sanity_check():
-    # Check that we can access the DB directory
-    if not os.path.isdir(GREYLIST_DB):
-        die("DB directory does not exist: " + GREYLIST_DB)
-
-    # Check that permissions allow access to the DB directory
-    try:
-        test_fn = ".test.%s" % os.getpid()
-
-        add_db(test_fn)
-        check_db(test_fn)
-        clean_db(test_fn)
-    except (OSError, IOError):
-        die("Wrong permissions for DB directory: " + GREYLIST_DB)
+# def sanity_check():
+#     # Check that we can access the DB directory
+#     if not os.path.isdir(GREYLIST_DB):
+#         die("DB directory does not exist: " + GREYLIST_DB)
+#
+#     # Check that permissions allow access to the DB directory
+#     try:
+#         test_fn = ".test.%s" % os.getpid()
+#
+#         add_db(test_fn)
+#         check_db(test_fn)
+#         clean_db(test_fn)
+#     except (OSError, IOError):
+#         die("Wrong permissions for DB directory: " + GREYLIST_DB)
 
 
 def log(s):
@@ -108,7 +110,7 @@ def error(s):
     syslog.syslog(syslog.LOG_ERR, s)
 
 
-def process_one():
+def process_one(conn):
     d = {}
 
     while 1:
@@ -135,25 +137,25 @@ def process_one():
 
     log("Processing client: S:%s H:%s" % (ip, helo))
 
-    action = process_ip(ip, helo)
+    action = process_ip(ip, helo, conn)
 
     log("Action for IP %s: %s" % (ip, action))
     sys.stdout.write('action=%s\n\n' % action)
 
 
-def process_ip(ip, helo):
+def process_ip(ip, helo, conn):
     if check_whitelist(ip):
         log("%s is whitelisted" % ip)
         return "ok You are cleared to land"
     if not check_rbls(ip) and not check_badhelo(helo):
         return "ok You are cleared to land"
 
-    t = check_db(ip)
+    t = check_db(ip, conn)
 
     if t < 0:
         log("%s not in greylist DB, adding it" % ip)
 
-        add_db(ip)
+        add_db(ip, conn)
 
         return "defer Are you a spammer? If not, just retry!"
     elif t < MIN_GREYLIST_TIME * 60:
@@ -223,29 +225,45 @@ def check_badhelo(helo):
     return False
 
 
-def check_db(ip):
+def check_db(ip, conn):
     """
     Check if ip is in the GL database.
     Returns -1 if not present, or the number of seconds
     since it has been added.
     """
-    fn = os.path.join(GREYLIST_DB, ip)
 
-    try:
-        s = os.stat(fn)
-    except OSError:
-        return -1
+    query = """select ipv4addr,epoch from ip where ipv4addr = '{}';""".format(ip)
+    cursor = conn.cursor()
+    count = cursor.execute(query)
+    if count > 0:
+        data = cursor.fetchone()
+        desc = cursor.description
+        for (name, value) in zip(desc, data):
+            if name == "epoch":
+                return time.time() - value
+    return -1
 
-    return time.time() - s.st_mtime
+    # fn = os.path.join(GREYLIST_DB, ip)
+    #
+    # try:
+    #     s = os.stat(fn)
+    # except OSError:
+    #     return -1
+    #
+    # return time.time() - s.st_mtime
 
 
-def add_db(ip):
+def add_db(ip, conn):
     """Add the specified IP to the GL database"""
-    open(os.path.join(GREYLIST_DB, ip), "w").close()
+
+    query = """insert into ip values ('{}');""".format(ip)
+    conn.query(query)
+    conn.commit()
+    # open(os.path.join(GREYLIST_DB, ip), "w").close()
 
 
-def clean_db(ip):
-    os.remove(os.path.join(GREYLIST_DB, ip))
+# def clean_db(ip):
+#     os.remove(os.path.join(GREYLIST_DB, ip))
 
 
 if __name__ == "__main__":
