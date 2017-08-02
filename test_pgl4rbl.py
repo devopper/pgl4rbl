@@ -66,6 +66,7 @@ def test_helo(capsys, monkeypatch, tmpdir, triplet):
     client_address, helo_name, expected = triplet
     mock_data = "client_address=%s\nhelo_name=%s" % (client_address, helo_name)
 
+    pgl4rbl.load_config_file("pgl4rbl.conf")
     monkeypatch.setattr('sys.stdin', StringIO.StringIO(mock_data))
     conn = MySQLdb.Connect(host=HOST, user=USER, password=PASSWORD, db=DB)
     # Test
