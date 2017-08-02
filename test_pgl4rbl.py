@@ -68,7 +68,7 @@ def test_helo(capsys, monkeypatch, tmpdir, triplet):
 
     pgl4rbl.load_config_file("pgl4rbl.conf")
     monkeypatch.setattr('sys.stdin', StringIO.StringIO(mock_data))
-    conn = MySQLdb.Connect(host=HOST, user=USER, password=PASSWORD, db=DB)
+    conn = MySQLdb.Connect(host=HOST, user=USER, passwd=PASSWORD, db=DB)
     # Test
     pgl4rbl.process_one(conn)
 

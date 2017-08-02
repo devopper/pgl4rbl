@@ -52,7 +52,7 @@ def main():
     # Configure syslog support
     syslog.openlog("pgl4rbl", syslog.LOG_PID, getattr(syslog, SYSLOG_FACILITY))
 
-    conn = MySQLdb.Connect(host=HOST, user=USER, password=PASSWORD, db=DB)
+    conn = MySQLdb.Connect(host=HOST, user=USER, passwd=PASSWORD, db=DB)
 
     # sanity_check()
     print "args = " + args
@@ -263,7 +263,7 @@ def check_db(ip, conn):
 def add_db(ip, conn):
     """Add the specified IP to the GL database"""
 
-    query = """insert into ip values ('{}');""".format(ip)
+    query = """insert into ip values ('{}',UNIX_TIMESTAMP(now()));""".format(ip)
     conn.query(query)
     conn.commit()
     # open(os.path.join(GREYLIST_DB, ip), "w").close()
