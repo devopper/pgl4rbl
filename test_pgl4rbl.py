@@ -28,6 +28,7 @@
 import StringIO
 import sys
 
+import MySQLdb
 import pytest
 
 import pgl4rbl
@@ -66,9 +67,9 @@ def test_helo(capsys, monkeypatch, tmpdir, triplet):
     mock_data = "client_address=%s\nhelo_name=%s" % (client_address, helo_name)
 
     monkeypatch.setattr('sys.stdin', StringIO.StringIO(mock_data))
-
+    conn = MySQLdb.Connect(host=HOST, user=USER, password=PASSWORD, db=DB)
     # Test
-    pgl4rbl.process_one()
+    pgl4rbl.process_one(conn)
 
     # Assert
     assert capsys.readouterr()[0] == expected
