@@ -13,6 +13,7 @@ The core features which differ from the original version are as follows:
 
 * MySQL database for storage of greylisted IPs
 * Automatic clean-up of IPs over a certain age (stored as epoch in database table)
+* Added SMTP error codes for better RFC compliance
 
 ## Installation
 
