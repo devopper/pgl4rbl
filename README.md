@@ -105,3 +105,11 @@ The default configuration of rblgrey includes the following blacklists:
 
 In our experience, outright rejection of email through these blacklists would be too harsh, while
 their usage within rblgrey achieves a very good balance.
+
+## To run the test
+
+To run the test, simply execute the following in the rblgrey directory (please note, you're best starting with an empty database and separate copy of rblgrey before continuing):
+
+```sh
+python -m pytest test_rblgrey.py
+```
