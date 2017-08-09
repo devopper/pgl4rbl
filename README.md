@@ -14,7 +14,7 @@ Install rblgrey somewhere on the local Postfix filesystem, for instance:
 
 ```sh
 cd /usr/local
-git clone https://github.com/devopper/rblgrey 
+git clone https://github.com/devopper/rblgrey.git
 ```
 
 Create the `rblgrey` user:
