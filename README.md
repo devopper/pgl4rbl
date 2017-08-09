@@ -7,6 +7,12 @@ This application utilises RBL (DNS Blacklists) and Greylisting in a unique way b
 Information on the original application where this was forked from and how it came to be, can be found here:
 [blog post](http://giovanni.bajo.it/post/47121521214/grey-on-black-combining-greylisting-with-blacklists).
 
+### Core Features
+
+The core features which differ from the original version are as follows:
+
+* MySQL database for storage of greylisted IPs
+* Automatic clean-up of IPs over a certain age (stored as epoch in database table)
 
 ## Installation
 
