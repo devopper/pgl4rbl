@@ -226,8 +226,5 @@ def check_badhelo(helo):
 
     return False
 
-# def clean_db(ip):
-#     os.remove(os.path.join(GREYLIST_DB, ip))
-
 if __name__ == "__main__":
     main()
