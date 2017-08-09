@@ -1,44 +1,52 @@
-# PGL4RBL: Greylisting on RBL (DNS blacklist) for Postfix
+# RBLGrey: Greylisting on RBL (DNS blacklist) for Postfix
 
-[![Build Status](https://travis-ci.org/develersrl/pgl4rbl.svg?branch=master)](https://travis-ci.org/develersrl/pgl4rbl)
-[![Coverage Status](http://img.shields.io/coveralls/develersrl/pgl4rbl.svg)](https://coveralls.io/r/develersrl/pgl4rbl)
+**This application was forked from https://github.com/develersrl/rblgrey and all core rbl check functions are from there.**
 
-This package implements a Postfix policy server that mixes two widely used techniques: greylisting
-and RBL (DNS blacklists). The idea is that SMTP clients that match a RBL get greylisted. Normal
-clients are not delayed (unlike a normal greylisting implementation), and RBL false positives do
-not cause problems (like when outright blocking them at the SMTP level).
+This application utilises RBL (DNS Blacklists) and Greylisting in a unique way by only Greylisting clients who happen to be on one of the RBL lists that are checked during execution. The reason this is better than standard greylisting is because it allows the majority of e-mail to go through without delay and only singles out those who are either on a blacklist for a very good reason or simply there accidentally.
 
-More information can be found in this
+Information on the original application where this was forked from and how it came to be, can be found here:
 [blog post](http://giovanni.bajo.it/post/47121521214/grey-on-black-combining-greylisting-with-blacklists).
-
-
 
 
 ## Installation
 
-Install pgl4rbl somewhere on the local Postfix filesystem, for instance:
+Install rblgrey somewhere on the local Postfix filesystem, for instance:
 
 ```sh
 cd /usr/local
-git clone https://github.com/develersrl/pgl4rbl
+git clone https://github.com/devopper/rblgrey 
 ```
 
-Create the `pgl4rbl` user:
+Create the `rblgrey` user:
 
 ```sh
-adduser --home=/var/spool/postfix/pgl4rbl --ingroup=nogroup --shell=/usr/sbin/nologin
+adduser --home=/var/spool/postfix/rblgrey --ingroup=nogroup --shell=/usr/sbin/nologin
 ```
 
-Edit the configuration file (`/usr/local/pgl4rbl/pgl4rbl.conf`) as needed. All defaults are meant
+Create the database using the 'schema.sql' file provided:
+
+```sh
+mysql -uroot -p < schema.sql
+```
+
+Create a database user, for example:
+
+```sh
+mysql -uroot -p
+grant all on rblgrey.* to 'rblgrey'@'localhost' identified by 'password';
+flush privileges;
+```
+
+Edit the configuration file (`/usr/local/rblgrey/rblgrey.conf`) as needed. All defaults are meant
 to be reasonable and correct, but you are welcome to change them if you want.
 
-Now, tell Postfix to start pgl4rbl as a service, by editing `/etc/postfix/master.cf` and adding
+Now, tell Postfix to start rblgrey as a service, by editing `/etc/postfix/master.cf` and adding
 this line to it:
 
 ```conf
 # greylisting on rbl
 rbl_grey unix  -       n       n       -       0       spawn
-        user=pgl4rbl argv=/usr/local/pgl4rbl/pgl4rbl.py --config /usr/local/pgl4rbl/pgl4rbl.conf
+        user=rblgrey argv=/usr/local/rblgrey/rblgrey.py --config /usr/local/rblgrey/rblgrey.conf
 ```
 
 Then, in `/etc/postfix/main.cf`, within the section `smptd_recipient_restrictions`, add the
@@ -51,11 +59,8 @@ check_policy_service unix:private/rbl_grey
 Finally, reload postfix:
 
 ```sh
-service postfix reload
+/etc/init.d/postfix restart
 ```
-
-
-
 
 ## Example of full anti-spam configuration
 
@@ -83,15 +88,12 @@ This is what happens, step by step:
 * If the mail destination's domain is not directly handled by Postfix, mail is rejected (=
   disable relay).
 * If the mail destination's email is not a valid email address, mail is rejected.
-* Otherwise, the mail is handled by pgl4rbl; it will check whether the client's IP is in one of
+* Otherwise, the mail is handled by rblgrey; it will check whether the client's IP is in one of
   the configured RBLs
-
-
-
 
 ## Choosing a Blacklist
 
-The default configuration of pgl4rbl includes the following blacklists:
+The default configuration of rblgrey includes the following blacklists:
 
  * [xbl.spamhaus.org](http://www.spamhaus.org/xbl/): list of hijacked PCs (aka "zombies")
  * [pbl.spamhaus.org](http://www.spamhaus.org/pbl/): list of consumer IP ranges, that shouldn't
@@ -102,4 +104,4 @@ The default configuration of pgl4rbl includes the following blacklists:
    spam traps
 
 In our experience, outright rejection of email through these blacklists would be too harsh, while
-their usage within pgl4rbl achieves a very good balance.
+their usage within rblgrey achieves a very good balance.
