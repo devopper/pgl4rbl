@@ -31,25 +31,25 @@ import sys
 import MySQLdb
 import pytest
 
-import pgl4rbl
+import rblgrey
 
 #
-# Ugly hack to "configure" pgl4rbl
+# Ugly hack to "configure" rblgrey
 #
 
-execfile("pgl4rbl.conf")
-setattr(pgl4rbl, "CHECK_BAD_HELO", CHECK_BAD_HELO)
-setattr(pgl4rbl, "MAX_GREYLIST_TIME", MAX_GREYLIST_TIME)
-setattr(pgl4rbl, "MIN_GREYLIST_TIME", MIN_GREYLIST_TIME)
-setattr(pgl4rbl, "RBLS", RBLS)
-setattr(pgl4rbl, "GREYLIST_WHITELIST", GREYLIST_WHITELIST)
+execfile("rblgrey.conf")
+setattr(rblgrey, "CHECK_BAD_HELO", CHECK_BAD_HELO)
+setattr(rblgrey, "MAX_GREYLIST_TIME", MAX_GREYLIST_TIME)
+setattr(rblgrey, "MIN_GREYLIST_TIME", MIN_GREYLIST_TIME)
+setattr(rblgrey, "RBLS", RBLS)
+setattr(rblgrey, "GREYLIST_WHITELIST", GREYLIST_WHITELIST)
 
 #
 # Tests
 #
 
-EXPECT_OK = "action=ok You are cleared to land\n\n"
-EXPECT_FAIL = "action=defer Are you a spammer? If not, just retry!\n\n"
+EXPECT_OK = "action=ok Greylisting OK\n\n"
+EXPECT_FAIL = "action=451 4.7.1 Greylisting in action, please try later.\n\n"
 
 
 @pytest.mark.parametrize("triplet", [
@@ -61,16 +61,16 @@ EXPECT_FAIL = "action=defer Are you a spammer? If not, just retry!\n\n"
 ])
 def test_helo(capsys, monkeypatch, tmpdir, triplet):
     # Prepare
-    setattr(pgl4rbl, "GREYLIST_DB", str(tmpdir))
+    setattr(rblgrey, "GREYLIST_DB", str(tmpdir))
 
     client_address, helo_name, expected = triplet
     mock_data = "client_address=%s\nhelo_name=%s" % (client_address, helo_name)
 
-    pgl4rbl.load_config_file("pgl4rbl.conf")
+    rblgrey.load_config_file("rblgrey.conf")
     monkeypatch.setattr('sys.stdin', StringIO.StringIO(mock_data))
-    conn = MySQLdb.Connect(host=HOST, user=USER, passwd=PASSWORD, db=DB)
+    conn = rblgrey.Database(HOST, USER, PASSWORD, DB)
     # Test
-    pgl4rbl.process_one(conn)
+    rblgrey.process_one(conn)
 
     # Assert
     assert capsys.readouterr()[0] == expected

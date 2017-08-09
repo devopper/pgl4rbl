@@ -36,40 +36,64 @@ import sys
 import syslog
 import time
 import MySQLdb
-
+import MySQLdb.cursors
 
 RE_IP = re.compile(r"\[(\d+)\.(\d+)\.(\d+)\.(\d+)\]")
 
+def log(s):
+    syslog.syslog(syslog.LOG_INFO, s)
+
+def error(s):
+    syslog.syslog(syslog.LOG_ERR, s)
+
+class Database():
+
+    def __init__(self, host, user, passwd, db):
+        try:
+           self.con = MySQLdb.Connect(host, user, passwd, db, cursorclass = MySQLdb.cursors.DictCursor)
+           self.cur = self.con.cursor()
+        except MySQLdb.Error, e:
+           error("Can't connect to database: %s" % e)
+           sys.exit(1)
+
+    def clean_db(self):
+           query = """DELETE FROM greylist WHERE epoch < (UNIX_TIMESTAMP() - {});""".format(MAX_GREYLIST_TIME)
+           self.con.query(query)
+           self.con.commit()
+
+    def check_db(self, ip):
+           query = """select ipv4addr,epoch from greylist where ipv4addr = '{}';""".format(ip)
+           count = self.cur.execute(query)
+           if count > 0:
+               result_set = self.cur.fetchall()
+               for row in result_set:
+                   return time.time() - row["epoch"]
+           return -1
+
+    def add_db(self, ip):
+           query = """insert into greylist (ipv4addr, epoch) values ('{}',UNIX_TIMESTAMP(now()));""".format(ip)
+           self.con.query(query)
+           self.con.commit()
 
 def main():
     # Allow SIGPIPE to kill our program
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
     args = parse_args()
-
+    
     load_config_file(args.config)
 
     # Configure syslog support
-    syslog.openlog("pgl4rbl", syslog.LOG_PID, getattr(syslog, SYSLOG_FACILITY))
+    syslog.openlog("rblgrey", syslog.LOG_PID, getattr(syslog, SYSLOG_FACILITY))
 
-    conn = MySQLdb.Connect(host=HOST, user=USER, passwd=PASSWORD, db=DB)
+    db = Database(HOST, USER, PASSWORD, DB)
+    db.clean_db()
 
-    # sanity_check()
-    print "args = " + args
-
-    if args.clean:
-        print "args clean"
-        os.system("find '%s' -type f -mmin +%d -delete" %
-                  (GREYLIST_DB, MAX_GREYLIST_TIME))
-    else:
-        print "about to process"
-        process_one(conn)
-
+    process_one(db)
 
 def parse_args():
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("-c", "--config", type=str, default="/etc/pgl4rbl.conf", help="path to the configuration file")
-    arg_parser.add_argument("-d", "--clean", action="store_true", help="clean the greylist db")
+    arg_parser.add_argument("-c", "--config", type=str, default="/etc/rblgrey.conf", help="path to the configuration file")
 
     return arg_parser.parse_args()
 
@@ -79,41 +103,16 @@ def load_config_file(config):
         execfile(config, globals())
     except Exception, e:
         # We can't use die() here
-        syslog.openlog("pgl4rbl", syslog.LOG_PID)
+        syslog.openlog("rblgrey", syslog.LOG_PID)
         error("Error parsing configuration: %s" % e)
         sys.exit(2)
-
-
-# def sanity_check():
-#     # Check that we can access the DB directory
-#     if not os.path.isdir(GREYLIST_DB):
-#         die("DB directory does not exist: " + GREYLIST_DB)
-#
-#     # Check that permissions allow access to the DB directory
-#     try:
-#         test_fn = ".test.%s" % os.getpid()
-#
-#         add_db(test_fn)
-#         check_db(test_fn)
-#         clean_db(test_fn)
-#     except (OSError, IOError):
-#         die("Wrong permissions for DB directory: " + GREYLIST_DB)
-
-
-def log(s):
-    syslog.syslog(syslog.LOG_INFO, s)
-
 
 def die(s):
     error(s)
     sys.exit(2)
 
 
-def error(s):
-    syslog.syslog(syslog.LOG_ERR, s)
-
-
-def process_one(conn):
+def process_one(db):
     d = {}
 
     while 1:
@@ -125,7 +124,6 @@ def process_one(conn):
         try:
             k, v = L.split('=', 1)
         except ValueError:
-            print "DIEING VALUEERROR"
             die("invalid input line: %r" % L)
 
         d[k.strip()] = v.strip()
@@ -134,41 +132,38 @@ def process_one(conn):
         ip = d['client_address']
         helo = d['helo_name']
     except KeyError:
-        print "DIEING KEYERROR"
         die("client_address/helo_name field not found in input data, aborting")
 
     if not ip:
         die("client_address empty in input data, aborting")
 
-    print "Processing client: S:%s H:%s" % (ip, helo)
     log("Processing client: S:%s H:%s" % (ip, helo))
 
-    action = process_ip(ip, helo, conn)
+    action = process_ip(ip, helo, db)
 
     log("Action for IP %s: %s" % (ip, action))
-    print "Action for IP %s: %s" % (ip, action)
     sys.stdout.write('action=%s\n\n' % action)
 
 
-def process_ip(ip, helo, conn):
+def process_ip(ip, helo, db):
     if check_whitelist(ip):
         log("%s is whitelisted" % ip)
-        return "ok You are cleared to land"
+        return "ok Greylisting OK"
     if not check_rbls(ip) and not check_badhelo(helo):
-        return "ok You are cleared to land"
+        return "ok Greylisting OK"
 
-    t = check_db(ip, conn)
+    t = db.check_db(ip)
 
     if t < 0:
         log("%s not in greylist DB, adding it" % ip)
 
-        add_db(ip, conn)
+        db.add_db(ip)
 
-        return "defer Are you a spammer? If not, just retry!"
+        return "451 4.7.1 Greylisting in action, please try later."
     elif t < MIN_GREYLIST_TIME * 60:
         log("%s too young in greylist DB" % ip)
 
-        return "defer Are you a spammer? If not, just retry!"
+        return "451 4.7.1 Greylisting in action, please try later."
     else:
         log("%s already present greylist DB" % ip)
 
@@ -231,47 +226,8 @@ def check_badhelo(helo):
 
     return False
 
-
-def check_db(ip, conn):
-    """
-    Check if ip is in the GL database.
-    Returns -1 if not present, or the number of seconds
-    since it has been added.
-    """
-
-    query = """select ipv4addr,epoch from ip where ipv4addr = '{}';""".format(ip)
-    cursor = conn.cursor()
-    count = cursor.execute(query)
-    if count > 0:
-        data = cursor.fetchone()
-        desc = cursor.description
-        for (name, value) in zip(desc, data):
-            if name == "epoch":
-                return time.time() - value
-    return -1
-
-    # fn = os.path.join(GREYLIST_DB, ip)
-    #
-    # try:
-    #     s = os.stat(fn)
-    # except OSError:
-    #     return -1
-    #
-    # return time.time() - s.st_mtime
-
-
-def add_db(ip, conn):
-    """Add the specified IP to the GL database"""
-
-    query = """insert into ip values ('{}',UNIX_TIMESTAMP(now()));""".format(ip)
-    conn.query(query)
-    conn.commit()
-    # open(os.path.join(GREYLIST_DB, ip), "w").close()
-
-
 # def clean_db(ip):
 #     os.remove(os.path.join(GREYLIST_DB, ip))
-
 
 if __name__ == "__main__":
     main()
