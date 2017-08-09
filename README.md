@@ -1,6 +1,6 @@
 # RBLGrey: Greylisting on RBL (DNS blacklist) for Postfix
 
-**This application was forked from https://github.com/develersrl/rblgrey and all core rbl check functions are from there.**
+**This application was forked from https://github.com/develersrl/pgl4rbl and all core rbl check functions are from there.**
 
 This application utilises RBL (DNS Blacklists) and Greylisting in a unique way by only Greylisting clients who happen to be on one of the RBL lists that are checked during execution. The reason this is better than standard greylisting is because it allows the majority of e-mail to go through without delay and only singles out those who are either on a blacklist for a very good reason or simply there accidentally.
 
